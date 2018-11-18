@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import cv2 # opencv: https://pypi.python.org/pypi/opencv-python
 
@@ -64,7 +65,7 @@ def read_data(filename, is_RGB, visualize=False, save=False, save_name=None):
 			cv2.imwrite(save_name, (cv2.cvtColor(image, cv2.COLOR_Lab2BGR) * 255).astype(np.uint8))
 
 	if not is_RGB:
-		image = cv2.cvtColor(image, cv2.COLOR_Lab2RGB)
+		image = cv2.cvtColor(image, cv2.COLOR_Lab2BGR)
 
 	return data, image
 
@@ -81,3 +82,9 @@ def write_data(data, filename):
 
 	with open(filename, "w") as f:
 		f.writelines(lines)
+
+
+def get_output_dir(dir_name):
+	if not os.path.exists(dir_name):
+		os.makedirs(dir_name)
+	return dir_name

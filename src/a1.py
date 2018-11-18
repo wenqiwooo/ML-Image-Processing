@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 import cv2
 
-from io_data import read_data, write_data
+from util import read_data, write_data, get_output_dir
 
 dirs = (
     (0, 1),
@@ -22,26 +22,37 @@ def load_data(filename):
 
 def normal_pdf(x, u, v):
     """
-    Returns N(y|x, var)
+    Returns N(x|u, v)
+    x: observed value
+    u: mean
+    v: variance
     """
     return 1 / math.sqrt(2*math.pi*v) * math.exp(-0.5 * (x-u)**2 / v)
 
 
 def sigmoid(x):
+    """
+    Sigmoid function
+    """
     return 1 / (1 + math.exp(-x))
 
 
 def tanh(x):
+    """
+    tanh function
+    """
     return 2 * sigmoid(2*x) - 1
 
 
-def gibbs(J, V, T):
+def gibbs(filename, J, V, T):
     """
+    Gibbs sampling algorithm
+    filename: path to image txt file
     J: coupling strength
     V: variance of likelihood distribution
     T: number of samples to draw
     """
-    Y = load_data('../a1/4_noise.txt')
+    Y = load_data(filename)
 
     # Initialize X to be same as Y
     X = np.array(Y, copy=True)
@@ -76,19 +87,19 @@ def gibbs(J, V, T):
     X[X == -1] = 0
     X[X == 1] = 255
     
-    cv2.imshow('', X)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    img_name = filename.split('/')[-1].split('.')[0]
+    cv2.imwrite('../output/denoise_gibbs_{}.jpg'.format(img_name), X)
 
 
-def vi(J, V, T):
+def vi(filename, J, V, T):
     """
     Variational inference algorithm
+    filename: path to image txt file
     J: coupling strength
     V: variance
     T: number of iterations
     """
-    Y = load_data('../a1/1_noise.txt')
+    Y = load_data(filename)
     
     X = np.array(Y, copy=True)
     N, M = len(X), len(X[0])
@@ -120,11 +131,20 @@ def vi(J, V, T):
     X[X < 0] = 0
     X[X > 0] = 255
 
-    cv2.imshow('', X)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    img_name = filename.split('/')[-1].split('.')[0]
+    cv2.imwrite('../output/denoise_vi_{}.jpg'.format(img_name), X)
 
 
 if __name__ == '__main__':
-    # gibbs(1, 1, 10)
-    vi(1, 1, 20)
+    get_output_dir('../output')
+
+    img_files = [
+        '../a1/1_noise.txt',
+        '../a1/2_noise.txt',
+        '../a1/3_noise.txt',
+        '../a1/4_noise.txt',
+    ]
+
+    for img in img_files:
+        gibbs(img, 1, 1, 20)
+        vi(img, 1, 1, 20)

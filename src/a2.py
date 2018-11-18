@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import cv2
 
-from io_data import read_data, write_data
+from util import read_data, write_data, get_output_dir
 
 
 # def gonzalez():
@@ -35,7 +35,7 @@ def diff_outer(a, b):
 def kmeanspp(X):
     """
     K-means++ initialization
-    X is [[L, a, b]]
+    X is a list of CIE-Lab values: [[L, a, b]]
     """    
     # Choose one pt uniformly at random to be first center
     j = random.randint(0, len(X)-1)
@@ -61,7 +61,7 @@ def kmeanspp(X):
 
 def kmeans_init(X, T):
     """
-    X is [[L, a, b]]
+    X is a list of CIE-Lab values: [[L, a, b]]
     T: number of iterations
     """
     c1, c2 = kmeanspp(X)
@@ -112,17 +112,22 @@ def kmeans_init(X, T):
     return (c1, v1, n1), (c2, v2, n2)
         
 
-def em(T):
+def em(filename, T, kmeans_init_iters=10, converge_limit=None):
     """
     EM-algorithm
-    T: number of iterations
+    filename: path to image txt file
+    T: max number of iterations
+    kmeans_init_iters: number of iterations to run k-means++ for initialization
+    converge_limit: stop when the log likelihood differs by less than this amount between iterations
     """
+
     # data is [[x, y, L, a, b]]
-    data, image = read_data('../a2/zebra.txt', False)
+    data, image = read_data(filename, False)
+    img_name = filename.split('/')[-1].split('.')[0]
 
     X = data[:,2:]
     N = len(X)
-    d1, d2 = kmeans_init(X, 10)
+    d1, d2 = kmeans_init(X, kmeans_init_iters)
     u1, v1, n1 = d1
     u2, v2, n2 = d2
     z1 = n1 / (n1 + n2)
@@ -132,7 +137,7 @@ def em(T):
 
     def wt_prob(x, u, v, w):
         """
-        x: observation
+        x: observed variable
         u: mean
         v: covariance matrix
         w: weight
@@ -150,7 +155,7 @@ def em(T):
     
     def m_step():
         """
-        Update parameters
+        Update parameters mu, sigma, alpha
         """
         nonlocal u1, u2, v1, v2, z1
         n1 = 0
@@ -175,12 +180,29 @@ def em(T):
         v2 = np.divide(v2, N-n1)
         # Update mixture weight
         z1 = n1 / N
-        
-    for _ in tqdm(range(T)):
+    
+
+    def log_likelihood():
+        """
+        Returns p(X|Theta)
+        """
+        p = 0
+        for x in X:
+            p += math.log(wt_prob(x, u1, v1, z1) + wt_prob(x, u2, v2, 1-z1))
+        return p
+
+    ll = -float('inf')
+    t_iterator = tqdm(range(T))
+    for _ in t_iterator:
         e_step()
         m_step()
-
-    print('u1: {}, v1: {}, u2: {}, v2: {}, z1: {}'.format(u1, v1, u2, v2, z1))
+        
+        if converge_limit is not None:
+            new_ll = log_likelihood()
+            if abs(new_ll - ll) < converge_limit:
+                t_iterator.close()
+                break
+            ll = new_ll
 
     mask = np.zeros_like(image)
     for i in tqdm(range(N)):
@@ -188,10 +210,29 @@ def em(T):
         if wt_prob(x, u1, v1, z1) > wt_prob(x, u2, v2, 1-z1):
             mask[int(d[1]), int(d[0])] = 255
 
-    cv2.imshow('', mask)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    
+    cv2.imwrite('../output/{}_mask.jpg'.format(img_name), mask)
+
+    seg1_img = np.zeros_like(image)
+    seg1_img[mask==255] = image[mask==255]
+    seg1_img = (seg1_img * 255).astype(np.uint8)
+    cv2.imwrite('../output/{}_seg1.jpg'.format(img_name), seg1_img)
+
+    seg2_img = np.zeros_like(image)
+    seg2_img[mask==0] = image[mask==0]
+    seg2_img = (seg2_img * 255).astype(np.uint8)
+    cv2.imwrite('../output/{}_seg2.jpg'.format(img_name), seg2_img)
+
 
 if __name__ == '__main__':
-    em(5)
+    get_output_dir('../output')
+
+    img_files = [
+        '../a2/cow.txt',
+        '../a2/fox.txt',
+        '../a2/owl.txt',
+        '../a2/zebra.txt',
+    ]
+
+    for img in img_files:
+        em(img, 40, converge_limit=0.001)
+    
